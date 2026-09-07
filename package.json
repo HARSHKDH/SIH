@@ -1,0 +1,61 @@
+{
+  "name": "legal-metrology-compliance-checker",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Legal Metrology Packaged Commodities Compliance Checker — SIH problem statement 26034",
+  "engines": {
+    "node": ">=20.11.0"
+  },
+  "scripts": {
+    "dev": "next dev",
+    "dev:worker": "tsx watch src/worker/index.ts",
+    "dev:all": "concurrently -n web,worker -c blue,magenta \"npm:dev\" \"npm:dev:worker\"",
+    "build": "prisma generate && next build",
+    "start": "next start",
+    "worker": "tsx src/worker/index.ts",
+    "prisma:generate": "prisma generate",
+    "db:push": "prisma db push",
+    "db:migrate": "prisma migrate dev",
+    "db:migrate:deploy": "prisma migrate deploy",
+    "db:seed": "tsx prisma/seed.ts",
+    "db:studio": "prisma studio",
+    "typecheck": "tsc --noEmit",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "0.124.0",
+    "@aws-sdk/client-s3": "3.700.0",
+    "@aws-sdk/s3-request-presigner": "3.700.0",
+    "@google/genai": "2.21.0",
+    "@prisma/client": "6.19.3",
+    "bcryptjs": "3.0.3",
+    "bullmq": "5.81.4",
+    "clsx": "2.1.1",
+    "date-fns": "4.4.0",
+    "docx": "9.7.1",
+    "dotenv": "16.6.1",
+    "ioredis": "5.11.1",
+    "jose": "6.2.12",
+    "next": "14.2.35",
+    "puppeteer": "23.11.1",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "recharts": "2.15.4",
+    "tailwind-merge": "3.6.0",
+    "zod": "3.25.76"
+  },
+  "devDependencies": {
+    "@types/node": "22.20.1",
+    "@types/react": "18.3.31",
+    "@types/react-dom": "18.3.7",
+    "autoprefixer": "10.5.5",
+    "concurrently": "9.1.2",
+    "eslint": "8.57.1",
+    "eslint-config-next": "14.2.35",
+    "postcss": "8.5.28",
+    "prisma": "6.19.3",
+    "tailwindcss": "3.4.19",
+    "tsx": "4.23.13",
+    "typescript": "5.9.3"
+  }
+}

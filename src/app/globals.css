@@ -1,0 +1,179 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+ * Typography note: the stack in tailwind.config.ts prefers Inter and falls back to
+ * the platform UI font. No webfont is fetched at runtime — this is a PWA an officer
+ * opens on mobile data in the field, and a blocking font request is a worse trade
+ * than rendering in Segoe UI or San Francisco.
+ */
+@layer base {
+  :root {
+    color-scheme: light;
+  }
+
+  * {
+    @apply border-line;
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+    /* Officers work one-handed on a phone; avoid rubber-band scroll surprises. */
+    overscroll-behavior-y: none;
+  }
+
+  body {
+    @apply bg-canvas text-body text-ink antialiased;
+    font-feature-settings: 'cv11', 'ss01';
+    font-variant-numeric: tabular-nums;
+    /* Respect the iOS safe area when installed to the home screen. */
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  h1 {
+    @apply text-h1 font-semibold tracking-tight;
+  }
+  h2 {
+    @apply text-h2 font-semibold;
+  }
+  h3 {
+    @apply text-h3 font-semibold;
+  }
+
+  /*
+   * One focus treatment for the whole app. Keyboard navigation has to be obvious
+   * in software used for statutory record-keeping.
+   */
+  :focus-visible {
+    @apply outline-none ring-2 ring-brand-hover ring-offset-2 ring-offset-canvas;
+  }
+
+  /* Native controls should not look alien against the muted palette. */
+  input,
+  textarea,
+  select,
+  button {
+    font: inherit;
+    color: inherit;
+  }
+
+  input[type='date'] {
+    /* Chrome's picker icon is near-black by default; tone it to the ink scale. */
+    @apply text-ink;
+  }
+
+  ::placeholder {
+    @apply text-ink-muted;
+  }
+
+  /* Slim, unobtrusive scrollbars on the data-dense screens. */
+  @supports selector(::-webkit-scrollbar) {
+    ::-webkit-scrollbar {
+      width: 10px;
+      height: 10px;
+    }
+    ::-webkit-scrollbar-track {
+      @apply bg-transparent;
+    }
+    ::-webkit-scrollbar-thumb {
+      @apply rounded-pill border-2 border-solid border-transparent bg-line-strong bg-clip-content;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      @apply bg-ink-muted bg-clip-content;
+    }
+  }
+}
+
+@layer components {
+  /* Skip link — visible only when focused. */
+  .skip-link {
+    @apply absolute left-4 top-2 z-50 -translate-y-16 rounded-control bg-brand px-4 py-2 text-body
+           font-medium text-ink-inverse transition-transform focus-visible:translate-y-0;
+  }
+
+  /*
+   * Data tables. Depth comes from thin dividers, never heavy borders or zebra
+   * striping — the goal is a legible audit register, not a spreadsheet.
+   */
+  .data-table {
+    @apply w-full border-collapse text-body;
+  }
+  .data-table thead th {
+    @apply whitespace-nowrap border-b border-line bg-surface-muted px-4 py-2.5 text-left
+           text-micro font-semibold uppercase tracking-wider text-ink-secondary;
+  }
+  .data-table tbody td {
+    @apply border-b border-line px-4 py-3 align-top;
+  }
+  .data-table tbody tr:last-child td {
+    @apply border-b-0;
+  }
+  .data-table tbody tr {
+    @apply transition-colors;
+  }
+  .data-table tbody tr:hover {
+    @apply bg-surface-muted;
+  }
+
+  /* Definition rows used on the scan detail and admin panels. */
+  .detail-row {
+    @apply flex flex-col gap-0.5 border-b border-line py-2.5 last:border-b-0 sm:flex-row sm:gap-4;
+  }
+  .detail-label {
+    @apply text-label font-medium text-ink-secondary sm:w-44 sm:shrink-0 sm:pt-px;
+  }
+  .detail-value {
+    @apply min-w-0 flex-1 break-words text-body text-ink;
+  }
+}
+
+@layer utilities {
+  /*
+   * Horizontal scroll container for wide data tables.
+   *
+   * `overflow-x: auto` alone is not enough. A table wider than its container keeps
+   * contributing its intrinsic width to the *document's* scroll area in Chrome, even
+   * though the container visibly clips it — which made every page with a table
+   * draggable sideways on a phone. `contain: paint` promises the browser that
+   * descendants paint inside this box, so the overflow stays local. Layout is
+   * unaffected and the table still scrolls inside the container.
+   *
+   * Verified: on a 390px viewport this takes document scrollWidth from 818px to 390px
+   * while the container keeps scrollWidth 849px / clientWidth 357px.
+   */
+  .scroll-x-contained {
+    overflow-x: auto;
+    contain: paint;
+  }
+
+  /* Hide scrollbars on the horizontally scrolling filter bar. */
+  .no-scrollbar {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+
+  .text-balance {
+    text-wrap: balance;
+  }
+}
+
+@media print {
+  /* The PDF report is the print artefact; screens should not be printed. */
+  .no-print {
+    display: none !important;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

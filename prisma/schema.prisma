@@ -1,0 +1,220 @@
+// ---------------------------------------------------------------------------
+// Legal Metrology Packaged Commodities Compliance Checker
+// SIH problem statement 26034
+//
+// Four core entities:
+//   User        — the officer or admin operating the tool
+//   Scan        — one photographed package label pushed through the pipeline
+//   Declaration — one mandatory declaration the vision model read off the label
+//   Violation   — one rule clause the label failed
+// ---------------------------------------------------------------------------
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Enums
+// ---------------------------------------------------------------------------
+
+enum Role {
+  OFFICER
+  ADMIN
+}
+
+enum ScanStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+/// Where the evidence came from. The brief requires checking product *listings* on
+/// e-commerce platforms as well as physical packages photographed in a shop.
+enum ScanSource {
+  IMAGE_UPLOAD
+  ECOMMERCE_LISTING
+}
+
+/// Supporting evidence an officer attaches in addition to the label photograph.
+enum AttachmentKind {
+  PHOTO
+  DOCUMENT
+}
+
+/// Severity is stored lower-cased in Postgres (critical/moderate/minor) to match
+/// the enforcement vocabulary used in the report, while staying SCREAMING_CASE in
+/// TypeScript where every other Prisma enum is.
+enum Severity {
+  CRITICAL @map("critical")
+  MODERATE @map("moderate")
+  MINOR    @map("minor")
+}
+
+/// The mandatory declarations required on a pre-packaged commodity under the
+/// Legal Metrology (Packaged Commodities) Rules, 2011.
+enum DeclarationType {
+  MANUFACTURER_NAME_ADDRESS
+  NET_QUANTITY
+  MRP
+  MFG_DATE
+  CONSUMER_CARE
+  COUNTRY_OF_ORIGIN
+  UNIT_SALE_PRICE
+}
+
+// ---------------------------------------------------------------------------
+// Models
+// ---------------------------------------------------------------------------
+
+model User {
+  id           String   @id @default(cuid())
+  name         String
+  email        String   @unique
+  passwordHash String
+  role         Role     @default(OFFICER)
+  /// Soft-disable an account without deleting its audit trail of scans.
+  isActive     Boolean  @default(true)
+  designation  String?
+  jurisdiction String?
+  lastLoginAt  DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  scans Scan[]
+
+  @@index([role])
+  @@map("users")
+}
+
+model Scan {
+  id          String     @id @default(cuid())
+  /// Publicly resolvable URL for the label photo (S3 URL, or /api/files/<key>).
+  imageUrl    String
+  /// Storage key, kept separately so the worker can re-read the object bytes.
+  imageKey    String
+  productName String?
+  status      ScanStatus @default(PENDING)
+
+  /// Whether this scan came from a photograph or an e-commerce listing.
+  source    ScanSource @default(IMAGE_UPLOAD)
+  /// The listing URL, when `source` is ECOMMERCE_LISTING. Retained as provenance.
+  sourceUrl String?
+  /// Declaration text scraped from the listing page, kept as evidence of what the
+  /// seller published at the time of inspection.
+  sourceText String?
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  /// 0–100. Null until the rule engine has run.
+  complianceScore Int?
+  /// URL of the generated PDF report. Null until Puppeteer has rendered it.
+  reportUrl       String?
+  reportKey       String?
+
+  /// Free-text observation captured by the officer on the scan detail screen.
+  officerNote String?
+
+  /// Verbatim JSON returned by the vision model — retained as evidence so a
+  /// contested finding can always be traced back to what was actually read.
+  rawExtraction Json?
+
+  /// Populated when status = FAILED so the UI can explain the failure.
+  failureReason String?
+  attemptCount  Int    @default(0)
+
+  processingStartedAt DateTime?
+  processedAt         DateTime?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  declarations Declaration[]
+  violations   Violation[]
+  attachments  Attachment[]
+
+  @@index([userId])
+  @@index([status])
+  @@index([createdAt])
+  @@index([complianceScore])
+  @@index([source])
+  @@map("scans")
+}
+
+/// Supporting evidence attached to a scan by the inspecting officer — a second angle
+/// of the pack, a shelf photograph showing the goods offered for sale, a scanned
+/// invoice. Held separately from `Scan.imageKey` because that image is the subject of
+/// the assessment while these are corroborating material.
+model Attachment {
+  id     String @id @default(cuid())
+  scanId String
+  scan   Scan   @relation(fields: [scanId], references: [id], onDelete: Cascade)
+
+  kind        AttachmentKind @default(PHOTO)
+  /// Storage key of the uploaded object.
+  fileKey     String
+  fileUrl     String
+  /// Original filename as supplied, shown in the reports.
+  fileName    String
+  contentType String
+  byteSize    Int
+  /// Officer's description of what this evidences.
+  caption     String?
+
+  /// Who attached it. Kept even if they are later deactivated.
+  uploadedById String
+  createdAt    DateTime @default(now())
+
+  @@index([scanId])
+  @@map("attachments")
+}
+
+model Declaration {
+  id     String @id @default(cuid())
+  scanId String
+  scan   Scan   @relation(fields: [scanId], references: [id], onDelete: Cascade)
+
+  type DeclarationType
+  /// Exactly what was read off the label. Null means "not present on the label".
+  valueFound String?
+  /// Model confidence, 0.0–1.0.
+  confidence Float @default(0)
+  /// Normalised [x, y, width, height] in 0–1 image space: { x, y, width, height }.
+  boundingBox Json?
+  /// Estimated cap-height of the printed text in millimetres, used for the
+  /// legibility checks in Rule 9.
+  fontSizeEst Float?
+
+  createdAt DateTime @default(now())
+
+  @@unique([scanId, type])
+  @@index([scanId])
+  @@map("declarations")
+}
+
+model Violation {
+  id     String @id @default(cuid())
+  scanId String
+  scan   Scan   @relation(fields: [scanId], references: [id], onDelete: Cascade)
+
+  /// Stable identifier for the failed clause, e.g. "LM-PCR-6(1)(b)".
+  ruleCode    String
+  /// Short human title of the clause, e.g. "Net quantity declaration".
+  ruleTitle   String
+  description String
+  severity    Severity
+  /// What the officer should do about it.
+  suggestedAction String?
+
+  createdAt DateTime @default(now())
+
+  @@index([scanId])
+  @@index([ruleCode])
+  @@index([severity])
+  @@map("violations")
+}

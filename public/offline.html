@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en-IN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#1E3A5F" />
+    <title>Offline · Legal Metrology Compliance Checker</title>
+    <!--
+      Standalone by necessity: this page is served by the service worker when the
+      network is unreachable, so it cannot depend on the Tailwind bundle. The palette
+      is inlined to match the rest of the application.
+    -->
+    <style>
+      :root {
+        --brand: #1e3a5f;
+        --canvas: #f7f8fa;
+        --surface: #ffffff;
+        --ink: #1a202c;
+        --ink-secondary: #4a5568;
+        --ink-muted: #718096;
+        --line: #e2e8f0;
+        --moderate: #b7791f;
+        --moderate-soft: #faf3e6;
+        --moderate-border: #ebd9b4;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 1.5rem;
+        background: var(--canvas);
+        color: var(--ink);
+        font-family: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue',
+          Arial, sans-serif;
+        font-size: 0.875rem;
+        line-height: 1.5;
+      }
+      .card {
+        width: 100%;
+        max-width: 30rem;
+        background: var(--surface);
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        box-shadow: 0 1px 3px 0 rgba(26, 32, 44, 0.05);
+        overflow: hidden;
+      }
+      .masthead {
+        display: flex;
+        align-items: center;
+        gap: 0.625rem;
+        padding: 0.875rem 1.25rem;
+        background: var(--brand);
+        color: #fff;
+      }
+      .mark {
+        width: 2rem;
+        height: 2rem;
+        flex: none;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 5px;
+        background: rgba(255, 255, 255, 0.12);
+        font-weight: 600;
+        font-size: 0.8125rem;
+      }
+      .masthead p {
+        margin: 0;
+        font-size: 0.75rem;
+        font-weight: 600;
+      }
+      .masthead span {
+        display: block;
+        font-size: 0.6875rem;
+        font-weight: 400;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: rgba(255, 255, 255, 0.6);
+      }
+      .body {
+        padding: 1.5rem 1.25rem;
+      }
+      h1 {
+        margin: 0 0 0.5rem;
+        font-size: 1.25rem;
+        font-weight: 600;
+        letter-spacing: -0.01em;
+      }
+      p.lede {
+        margin: 0 0 1rem;
+        color: var(--ink-secondary);
+      }
+      .notice {
+        border: 1px solid var(--moderate-border);
+        border-left: 3px solid var(--moderate);
+        background: var(--moderate-soft);
+        border-radius: 5px;
+        padding: 0.625rem 0.75rem;
+        color: var(--ink-secondary);
+        font-size: 0.8125rem;
+      }
+      .notice strong {
+        color: var(--ink);
+      }
+      ul {
+        margin: 1rem 0 0;
+        padding-left: 1.125rem;
+        color: var(--ink-secondary);
+      }
+      li {
+        margin-bottom: 0.375rem;
+      }
+      .actions {
+        display: flex;
+        gap: 0.5rem;
+        padding: 0.875rem 1.25rem;
+        border-top: 1px solid var(--line);
+        background: #fbfcfd;
+      }
+      button {
+        height: 2.75rem;
+        padding: 0 1rem;
+        border: none;
+        border-radius: 5px;
+        background: var(--brand);
+        color: #fff;
+        font: inherit;
+        font-weight: 500;
+        cursor: pointer;
+      }
+      button:hover {
+        background: #2c5282;
+      }
+      footer {
+        margin-top: 1rem;
+        text-align: center;
+        font-size: 0.6875rem;
+        color: var(--ink-muted);
+      }
+    </style>
+  </head>
+  <body>
+    <div>
+      <div class="card">
+        <div class="masthead">
+          <span class="mark" aria-hidden="true">LM</span>
+          <p>
+            Legal Metrology
+            <span>Compliance Checker</span>
+          </p>
+        </div>
+
+        <div class="body">
+          <h1>You are offline</h1>
+          <p class="lede">
+            This screen needs a connection. The application shell is installed on this device, so it
+            will load again as soon as you are back on the network.
+          </p>
+
+          <div class="notice">
+            <strong>Nothing has been lost.</strong> Scans already submitted continue processing on
+            the server. Compliance findings and reports are never cached on the device, so what you
+            see is always the current record.
+          </div>
+
+          <ul>
+            <li>Check mobile data or Wi-Fi.</li>
+            <li>Step outside a building or basement if the signal is weak.</li>
+            <li>Photographs taken now can be submitted once you reconnect.</li>
+          </ul>
+        </div>
+
+        <div class="actions">
+          <button type="button" onclick="window.location.reload()">Try again</button>
+        </div>
+      </div>
+
+      <footer>Legal Metrology Act, 2009 · Packaged Commodities Rules, 2011</footer>
+    </div>
+  </body>
+</html>
