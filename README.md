@@ -316,19 +316,25 @@ Some judgement calls are documented in the code rather than hidden:
 ### Prerequisites
 
 - Node.js ≥ 20.11
-- PostgreSQL ≥ 14
-- Redis ≥ 6
+- Docker (for PostgreSQL and Redis), or your own PostgreSQL ≥ 14 and Redis ≥ 6
 - **No API key required to run** — see [Which API keys do I need?](#which-api-keys-do-i-need)
 
-The fastest way to get the two services up:
+### One command
+
+After the one-time setup below, this is all you need:
 
 ```bash
-docker run -d --name lm-postgres \
-  -e POSTGRES_USER=lm -e POSTGRES_PASSWORD=lmpassword -e POSTGRES_DB=legal_metrology \
-  -p 5433:5432 postgres:16-alpine
-
-docker run -d --name lm-redis -p 6379:6379 redis:7-alpine
+npm run stack:up
 ```
+
+It starts Docker Desktop if it is not running, brings up PostgreSQL and Redis and
+**waits for both to pass a health check** rather than merely to exist, applies any
+pending migrations, then starts the web server and the worker together.
+
+The waiting is the point. Started in the wrong order, the worker boots against a
+database that is not yet accepting queries and the failure reads like an application
+bug. Ctrl-C stops the app and deliberately leaves PostgreSQL and Redis running, since
+there is no reason to discard a warm database between runs.
 
 ### Setup
 
@@ -342,14 +348,17 @@ cp .env.example .env
 node -e "console.log(require('crypto').randomBytes(48).toString('base64url'))"
 #    ...and paste it into JWT_SECRET.
 
-# 3. Create the schema
+# 3. Start PostgreSQL and Redis
+docker compose up -d --wait
+
+# 4. Create the schema
 npm run db:migrate
 
-# 4. Load demo data (4 accounts, 10 scans, 8 pre-rendered PDF reports)
+# 5. Load demo data (4 accounts, 10 scans, 8 pre-rendered PDF reports)
 npm run db:seed
 
-# 5. Run the web server and the worker together
-npm run dev:all
+# 6. From now on, just this
+npm run stack:up
 ```
 
 Open <http://localhost:3000> and sign in with the credentials below.
@@ -577,7 +586,9 @@ prisma/
   schema.prisma            User, Scan, Declaration, Violation, Attachment + enums
   migrations/              generated SQL migration history
   seed.ts                  demo data, built with the real rule engine
+docker-compose.yml         PostgreSQL + Redis for local development
 scripts/
+  stack.mjs                one-command startup: Docker, services, migrations, app
   generate-assets.ts       regenerates PWA icons + the 6 mock label images
   check-rules.ts           scores every mock archetype through the real rule book
   check-listing.ts         SSRF address/URL classification + listing parser checks
@@ -716,9 +727,12 @@ No gradients as surfaces, no glassmorphism, no neon.
 
 | Command | Purpose |
 | --- | --- |
-| `npm run dev` | Next.js dev server |
-| `npm run dev:worker` | Worker with file watching |
-| `npm run dev:all` | Both, via `concurrently` |
+| `npm run stack:up` | **Everything.** Starts Docker if needed, waits for PostgreSQL and Redis to be healthy, applies migrations, then runs the web server and worker |
+| `npm run stack:down` | Stops PostgreSQL and Redis, keeping their data |
+| `npm run stack:logs` | Follows the PostgreSQL and Redis logs |
+| `npm run dev` | Next.js dev server alone |
+| `npm run dev:worker` | Worker alone, with file watching |
+| `npm run dev:all` | Both app processes, assuming the databases are already up |
 | `npm run build` | `prisma generate` then `next build` |
 | `npm run start` | Production web server |
 | `npm run worker` | Production worker |
@@ -734,6 +748,14 @@ No gradients as surfaces, no glassmorphism, no neon.
 | `npx tsx scripts/check-listing.ts` | Verify the SSRF address classifier and the listing parser. Offline and deterministic; kept because an early version of the classifier silently failed to match every CIDR whose first octet was ≥ 128, including the cloud metadata range |
 | `npx tsx scripts/check-listing-mode.ts` | Prove the Rule 6(10) behaviour: runs one label image through the real extractor twice, as a photograph and as a listing, and asserts that declarations published only as page text are recorded with a null bounding box while nothing is invented. Needs `GEMINI_API_KEY` and refuses to run against the offline extractor, which ignores the prompt |
 | `node scripts/e2e-verify.mjs` | End-to-end check of the DOCX report, CSV export, attachments and listing capture against a running instance. Opens the DOCX as a zip and parses the CSV rather than trusting status codes. Writes test attachments, so use a development database |
+
+There is deliberately no script for wiping the database. To start completely fresh —
+**this destroys every scan, finding and account** — run it by hand so it cannot happen
+by accident, then re-seed:
+
+```bash
+docker compose down -v && docker compose up -d --wait && npm run db:migrate && npm run db:seed
+```
 
 ---
 

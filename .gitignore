@@ -23,6 +23,12 @@ dist/
 # local object storage fallback (uploaded label images + generated PDFs)
 storage/
 
+# database dumps — contain real inspection records and password hashes.
+# Note the leading path anchors: prisma/migrations/**/*.sql must stay tracked.
+/lm-backup.sql
+/*-backup.sql
+/dump.sql
+
 # prisma
 prisma/*.db
 prisma/*.db-journal

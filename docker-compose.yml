@@ -1,0 +1,69 @@
+# Local development infrastructure: PostgreSQL and Redis.
+#
+# The application itself is NOT containerised here, deliberately. Both app processes
+# are run from the host by `npm run dev:all` so that hot reload, `tsx watch` on the
+# worker and the debugger all keep working. This file exists only to make the two
+# stateful dependencies reproducible and, more importantly, to stop them from being
+# hand-created with `docker run` — which is how they end up configured slightly
+# differently on each machine.
+#
+# Normally you do not invoke this directly. `npm run stack:up` starts Docker Desktop
+# if it is not running, brings these up, waits for both to pass their health check,
+# applies pending migrations, and then starts the web server and worker.
+#
+# The credentials below are local-development values and are committed on purpose so
+# a clone works with no setup. They must match DATABASE_URL and REDIS_URL in .env.
+# Nothing here should ever be reachable from outside the machine.
+
+name: legal-metrology
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: lm-postgres
+    # Comes back by itself when Docker Desktop restarts, which is the single most
+    # common reason the app appears to be broken on a fresh boot.
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: lm
+      POSTGRES_PASSWORD: lmpassword
+      POSTGRES_DB: legal_metrology
+    ports:
+      # 5433 on the host, not 5432 — a system-wide Postgres install is common and
+      # this avoids a port clash that presents as a confusing auth failure.
+      - '5433:5432'
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      # `pg_isready` rather than a TCP probe: Postgres accepts connections for a
+      # moment before it is actually ready to serve queries, and migrations run
+      # immediately after this passes.
+      test: ['CMD-SHELL', 'pg_isready -U lm -d legal_metrology']
+      interval: 3s
+      timeout: 5s
+      retries: 20
+      start_period: 5s
+
+  redis:
+    image: redis:7-alpine
+    container_name: lm-redis
+    restart: unless-stopped
+    ports:
+      - '6379:6379'
+    volumes:
+      - redis-data:/data
+    # Append-only persistence so a queued-but-unprocessed job survives a restart.
+    # The queue is not a source of truth — every job carries only a scan id — but
+    # losing one still means a scan silently never gets picked up.
+    command: ['redis-server', '--appendonly', 'yes']
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 3s
+      timeout: 5s
+      retries: 20
+
+volumes:
+  # Named rather than anonymous, so `docker compose down` can be run without
+  # wondering which hash-named volume held the inspection records.
+  postgres-data:
+  redis-data:
