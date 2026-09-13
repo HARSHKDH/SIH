@@ -33,8 +33,14 @@ npx prisma migrate deploy
 # belonging to the demo users, but it also resets their passwords to the published
 # demo values, which is not something to do on every restart.
 if [ "$SEED_ON_BOOT" = "true" ]; then
-  echo "==> Seeding demo data"
-  npm run db:seed || echo "WARNING: seeding failed; continuing without demo data" >&2
+  # Reports are skipped by default. The seed renders eight PDFs through Puppeteer, and
+  # this runs *before* the server starts — on a platform with a startup health check that
+  # is long enough to have the first deploy marked as failed. Every report regenerates on
+  # first download from the stored extraction, so nothing is lost by deferring them.
+  # Set SEED_SKIP_REPORTS=0 to render them up front anyway.
+  echo "==> Seeding demo data (reports deferred; they render on first download)"
+  SEED_SKIP_REPORTS="${SEED_SKIP_REPORTS:-1}" npm run db:seed \
+    || echo "WARNING: seeding failed; continuing without demo data" >&2
 fi
 
 echo "==> Starting web server and worker on port ${PORT:-3000}"
