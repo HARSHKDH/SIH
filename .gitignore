@@ -5,13 +5,19 @@ node_modules/
 
 # next.js
 .next/
-out/
+/out/
 next-env.d.ts
 *.tsbuildinfo
 
 # production
-build/
-dist/
+#
+# Anchored with a leading slash. Without one, git matches the pattern at *any* depth —
+# so a bare `build/` would also ignore `src/anything/build/`. That is not hypothetical:
+# an unanchored `storage/` below silently excluded the whole of `src/lib/storage/` from
+# this repository, and the omission only surfaced as a webpack "can't resolve
+# @/lib/storage" when building from a fresh clone.
+/build/
+/dist/
 
 # environment
 .env
@@ -20,8 +26,9 @@ dist/
 .env.test.local
 .env.production.local
 
-# local object storage fallback (uploaded label images + generated PDFs)
-storage/
+# local object storage fallback (uploaded label images + generated PDFs).
+# Anchored: `src/lib/storage/` is source code and must stay tracked.
+/storage/
 
 # database dumps — contain real inspection records and password hashes.
 # Note the leading path anchors: prisma/migrations/**/*.sql must stay tracked.
@@ -47,5 +54,5 @@ Thumbs.db
 !.vscode/extensions.json
 
 # misc
-coverage/
+/coverage/
 .eslintcache
