@@ -840,18 +840,121 @@ admin panel, in the top bar and in the worker's boot log.
 
 ## Deployment
 
-1. Provision PostgreSQL and Redis; run `npm run db:migrate:deploy`.
-2. Set the environment. `JWT_SECRET` must be a real secret, and `NODE_ENV=production`
-   is what makes the session cookie `Secure`.
-3. Deploy the web tier (`npm run build && npm run start`) and the worker
-   (`npm run worker`) as separate services. Both need `DATABASE_URL` and `REDIS_URL`;
-   only the worker needs `GEMINI_API_KEY` and a Chrome build. The web tier needs outbound
-   HTTPS if listing capture is to be used; if egress is blocked, photograph scanning is
-   unaffected and the listing form reports the failure.
-4. Point a load balancer at the web tier and use `/api/health` as the probe (it returns
-   503 when the database or Redis is unreachable).
-5. Scale workers horizontally for throughput. `WORKER_CONCURRENCY` controls parallelism
-   within one process.
+### What this app needs from a platform
+
+Two things rule out most "connect your repo" hosts, so it is worth being explicit:
+
+1. **An always-on process.** The worker is a queue consumer, not a request handler. On a
+   function platform there is nothing to run it, so every scan stays `PENDING` for ever:
+   the site loads, login works, and nothing is ever assessed.
+2. **Shared storage between the web tier and the worker.** The worker renders the PDF and
+   the web tier serves it. Separate filesystems mean the worker cannot read the image the
+   web tier just received.
+
+Consequently: **Netlify and Vercel cannot host this on their own.** They can serve the web
+tier, but the half that does the work has to live somewhere else.
+
+### The shape that works
+
+A `Dockerfile` is included that runs **both processes in one container**, supervised by
+`concurrently`. That is what keeps shared storage working with no code change, and it is
+why local-disk storage is still viable in production. The tradeoff is that the two cannot
+scale independently — see [Scaling past one instance](#scaling-past-one-instance).
+
+Any platform that runs a container plus managed PostgreSQL and Redis will do. Railway is
+used below because it does all three from one repository.
+
+### Railway, step by step
+
+1. **Push to GitHub**, then at [railway.app](https://railway.app) create a project and
+   choose *Deploy from GitHub repo*. The `Dockerfile` and `railway.json` are detected
+   automatically; the health check is already configured to `/api/health`.
+2. **Add PostgreSQL** and **Add Redis** from the project's *New* menu.
+3. **Set the variables** on the app service. Reference the databases rather than pasting
+   their URLs, so a credential rotation does not break the app:
+
+   | Variable | Value |
+   | --- | --- |
+   | `DATABASE_URL` | `${{Postgres.DATABASE_URL}}` |
+   | `REDIS_URL` | `${{Redis.REDIS_URL}}` |
+   | `JWT_SECRET` | a fresh 32+ character secret (command below) |
+   | `GEMINI_API_KEY` | your key from [aistudio.google.com/apikey](https://aistudio.google.com/apikey) |
+   | `NODE_ENV` | `production` |
+   | `LOCAL_STORAGE_PATH` | `/app/storage` |
+   | `SEED_ON_BOOT` | `true` for the first deploy only, then delete it |
+
+   ```bash
+   node -e "console.log(require('crypto').randomBytes(48).toString('base64url'))"
+   ```
+
+4. **Attach a volume** to the app service, mounted at `/app/storage`. Without it, every
+   uploaded photograph and generated report is lost on each redeploy.
+5. **Generate a domain** under *Settings → Networking*. Railway terminates TLS, which
+   matters: in production the session cookie is issued `Secure`, so login silently fails
+   over plain HTTP. Nothing is misconfigured if that happens — it is the cookie doing its
+   job.
+6. Open the URL and sign in. With `SEED_ON_BOOT=true` the demo accounts exist; remove the
+   variable afterwards, because re-seeding resets those passwords to the published values.
+
+The entrypoint applies `prisma migrate deploy` on every boot, so a schema change ships
+with the deploy and needs no separate step.
+
+### Verifying a deployment
+
+```bash
+curl https://your-app.up.railway.app/api/health
+E2E_BASE_URL=https://your-app.up.railway.app node scripts/e2e-verify.mjs
+```
+
+`/api/health` returns 503 when PostgreSQL or Redis is unreachable, so it doubles as the
+load-balancer probe. The e2e script writes test attachments, so point it at a staging
+instance rather than a live register.
+
+### Testing the image locally first
+
+```bash
+docker build -t lm-app .
+docker compose up -d --wait
+
+docker run --rm -p 3100:3000 \
+  --network legal-metrology_default \
+  -e DATABASE_URL="postgresql://lm:lmpassword@postgres:5432/legal_metrology" \
+  -e REDIS_URL="redis://redis:6379" \
+  -e JWT_SECRET="at-least-thirty-two-characters-long-secret" \
+  -e GEMINI_API_KEY="$GEMINI_API_KEY" \
+  lm-app
+```
+
+Stop the local worker first (`npm run stack:down` leaves the databases up). Two workers on
+one Redis with unshared storage will fight over jobs, and the loser fails with "the
+uploaded label image could not be read from storage" — which looks like a container fault
+and is not one.
+
+### Scaling past one instance
+
+The single-container shape is deliberate but not permanent. To split the worker onto its
+own service, or to run more than one replica, storage has to become shared object storage
+— at which point the local disk is the only blocker, and the driver already handles it:
+
+| Variable | Value |
+| --- | --- |
+| `STORAGE_DRIVER` | `s3` |
+| `AWS_S3_BUCKET` | bucket name |
+| `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` | credentials |
+| `AWS_S3_ENDPOINT` | required for Cloudflare R2 or MinIO; omit for AWS |
+| `AWS_S3_FORCE_PATH_STYLE` | `true` for R2 and MinIO |
+
+Because a custom endpoint and path-style addressing are already supported, **Cloudflare R2
+works with no code change** and has a 10 GB free tier. With that set, run one service on
+`npm run start` and another on `npm run worker` from the same image, and scale the worker
+independently. `WORKER_CONCURRENCY` controls parallelism within a single process.
+
+### Alternative: one small VM
+
+If you would rather not use a PaaS, a single VM running `docker compose` gives the closest
+possible parity with local development — the same two containers, plus this image, sharing
+a Docker volume. It is also the cheapest option on providers with a free tier. It costs you
+TLS setup (Caddy or Nginx with Let's Encrypt), which the PaaS route does for free.
 
 The worker's container needs Chrome's shared libraries. `--no-sandbox` and
 `--disable-dev-shm-usage` are already set, which is what containers require.

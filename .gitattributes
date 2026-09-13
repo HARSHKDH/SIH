@@ -1,0 +1,26 @@
+# Files that are executed inside a Linux container must be checked out with LF
+# endings regardless of the developer's platform.
+#
+# This is not cosmetic. A CRLF checkout on Windows turns the shebang `#!/bin/sh`
+# into `#!/bin/sh\r`, and the container then fails to start with "exec format
+# error" or "bad interpreter" — an error that points nowhere near line endings.
+# The image built on a Linux host would work, so it would look like a
+# Windows-only mystery.
+*.sh text eol=lf
+Dockerfile text eol=lf
+*.dockerfile text eol=lf
+
+# Generated migration SQL is applied by the database, not by a shell, but keeping
+# it stable across platforms avoids spurious diffs.
+*.sql text eol=lf
+
+# Never line-ending-convert binary assets.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.webp binary
+*.ico binary
+*.pdf binary
+*.docx binary
+*.woff binary
+*.woff2 binary

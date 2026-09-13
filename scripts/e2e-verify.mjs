@@ -18,9 +18,20 @@
 import { readFile, writeFile, unlink } from 'node:fs/promises';
 import { deflateRawSync } from 'node:zlib';
 
-const BASE = 'http://localhost:3000';
-const EMAIL = 'officer@legalmetrology.gov.in';
-const PASSWORD = 'Officer@123';
+/*
+ * Override to test a container or a deployed instance:
+ *
+ *   E2E_BASE_URL=http://localhost:3100 node scripts/e2e-verify.mjs
+ *
+ * Note that this sets the session cookie header by hand. That matters when testing a
+ * production build over plain HTTP: with NODE_ENV=production the cookie is issued with
+ * the `Secure` attribute, so a browser or any cookie-jar client would refuse to send it
+ * back over an unencrypted connection. A real deployment must therefore be served over
+ * HTTPS — this override exists to smoke-test an image locally, not to suggest otherwise.
+ */
+const BASE = process.env.E2E_BASE_URL ?? 'http://localhost:3000';
+const EMAIL = process.env.E2E_EMAIL ?? 'officer@legalmetrology.gov.in';
+const PASSWORD = process.env.E2E_PASSWORD ?? 'Officer@123';
 
 let cookie = '';
 let pass = 0;
