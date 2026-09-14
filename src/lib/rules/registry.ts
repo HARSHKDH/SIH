@@ -5,6 +5,7 @@ import {
   rule9_2_minimumLetterHeight,
   rule9_3_netQuantityNumeralHeight,
 } from './clauses/legibility';
+import { rule6_1_misleadingDeclaration } from './clauses/misleading';
 import { rule6_1_countryOfOrigin } from './clauses/origin';
 import { rule6_2_declarationsGrouped } from './clauses/placement';
 import {
@@ -34,6 +35,7 @@ export const RULE_CLAUSES: readonly RuleClause[] = [
   rule6_1_d_manufactureDate,
   rule6_1_f_consumerCare,
   rule6_1_countryOfOrigin,
+  rule6_1_misleadingDeclaration,
   rule6_2_declarationsGrouped,
   rule9_1_legibility,
   rule9_2_minimumLetterHeight,

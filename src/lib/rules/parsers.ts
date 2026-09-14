@@ -162,6 +162,41 @@ export function parseNetQuantity(raw: string | null | undefined): ParsedNetQuant
   };
 }
 
+export interface ParsedReferenceUnit {
+  /** The reference amount expressed in the base unit: "kg" -> 1000, "100 g" -> 100. */
+  baseAmount: number;
+  kind: QuantityKind;
+  canonicalUnit: string;
+}
+
+/**
+ * Parses the reference unit of a unit sale price — the "kg" in "Rs. 370 per kg", or
+ * the "100 g" in "Rs. 37 per 100 g".
+ *
+ * Needed to check a declared unit price against the price and net quantity actually
+ * printed, which cannot be done while the reference unit is an opaque string. It reuses
+ * the metric table above rather than restating it, so a unit accepted for a net quantity
+ * declaration is the same set accepted here.
+ */
+export function parseReferenceUnit(raw: string | null | undefined): ParsedReferenceUnit | null {
+  if (!raw) return null;
+
+  const match = /^\s*(\d+(?:[.,]\d+)?)?\s*([a-zA-Z]{1,12})\.?\s*$/.exec(raw);
+  if (!match) return null;
+
+  const multiplier = match[1] ? Number.parseFloat(match[1].replace(',', '.')) : 1;
+  if (!Number.isFinite(multiplier) || multiplier <= 0) return null;
+
+  const unit = METRIC_UNITS[match[2].toLowerCase()];
+  if (!unit) return null;
+
+  return {
+    baseAmount: multiplier * unit.toBase,
+    kind: unit.kind,
+    canonicalUnit: unit.canonical,
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Prices
 // ---------------------------------------------------------------------------

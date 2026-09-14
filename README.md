@@ -47,7 +47,7 @@ Seven declarations are mandatory on a retail package under Rule 6(1):
 | Unit sale price, where sold by weight or measure | Rule 6(1) with Rule 2(m) |
 
 The app reads them off a photograph — or off an e-commerce product page — applies
-thirteen clause functions, and returns a 0–100 compliance score with every finding
+fourteen clause functions, and returns a 0–100 compliance score with every finding
 attributed to the rule it came from.
 
 Two kinds of subject can be inspected:
@@ -94,7 +94,7 @@ order the problem statement gives them so it can be read side by side.
 | --- | --- |
 | Web and/or mobile application | Next.js app, responsive, installable PWA with an offline page and a rear-camera capture path |
 | Automated extraction and validation of declarations | Gemini vision extraction → zod validation → deterministic rules |
-| Rule-based compliance checking | `src/lib/rules/` — thirteen clause functions, no DSL, no rule table |
+| Rule-based compliance checking | `src/lib/rules/` — fourteen clause functions, no DSL, no rule table |
 | Reports in **PDF and editable formats** | `/api/scans/[id]/report` (PDF), `/api/scans/[id]/report/docx` (DOCX), `/api/scans/export` (CSV) |
 | Dashboard for inspections, violations and compliance detail | `/dashboard`, `/admin/stats` |
 | Search and retrieval of previous scans and reports | `/scans` — text search, status, severity, score range, date range, officer, sortable and paginated |
@@ -107,7 +107,7 @@ order the problem statement gives them so it can be read side by side.
 | Image upload and product scanning | `/scans/new` — drag-drop, file picker, rear camera; presigned direct-to-storage upload |
 | Extraction of declarations and detection of mandatory ones | `src/lib/extraction/prompt.ts` + `schema.ts` |
 | Font size and readability analysis | `relative_text_sizes` estimates → Rule 9 clauses |
-| Detection of missing, misleading or non-standard declarations | Rule 8 (non-metric units), Rule 6(1)(c) (unitless quantity), Rule 6(1)(e) (tax wording) |
+| Detection of missing, misleading or non-standard declarations | Missing: every Rule 6(1) clause. Non-standard: Rule 8 non-metric units, Rule 6(1)(c) unitless quantity, Rule 6(1)(e) tax wording. Misleading: `clauses/misleading.ts` — conflicting duplicate declarations and unit-price reconciliation |
 | Generation of compliance / non-compliance reports | `src/lib/report/{template,docx}.ts` |
 | **Attachment of photographs and supporting evidence** | `src/components/scans/attachment-panel.tsx`, `/api/scans/[id]/attachments` — multiple photos and PDFs per scan, listed in both reports |
 | Repository of scanned products and inspection history | `/scans` + scan detail with full audit trail |
@@ -224,7 +224,7 @@ the scan is failed with an explanation rather than run through the rules. Runnin
 rule book against a blurry photo would produce a page of "declaration missing"
 violations that say nothing about the package.
 
-**4 — Rule engine.** `evaluateCompliance` runs the thirteen clause functions and scores
+**4 — Rule engine.** `evaluateCompliance` runs the fourteen clause functions and scores
 the result. Deterministic, no model involvement.
 
 **5 — Persistence.** `Declaration` and `Violation` rows are written in one transaction,
@@ -247,7 +247,7 @@ are not burned on an input that will never succeed. Either way the scan ends up
 
 ## The rule engine
 
-`src/lib/rules/` — thirteen clauses, one function each, no DSL. 115 total weight.
+`src/lib/rules/` — fourteen clauses, one function each, no DSL. 121 total weight.
 
 ```
 clauses/identity.ts    Rule 6(1)(a) manufacturer name + address     weight 18
@@ -259,6 +259,7 @@ clauses/price.ts       Rule 6(1)(e) retail sale price               weight 18
                        Rule 6(1)    unit sale price                 weight  3
 clauses/dates.ts       Rule 6(1)(d) month and year                  weight 11
 clauses/origin.ts      Rule 6(1)    country of origin               weight  7
+clauses/misleading.ts  Rule 6(1)    declarations must not mislead   weight  6
 clauses/placement.ts   Rule 6(2)    declarations grouped at one place weight 5
 clauses/legibility.ts  Rule 9(1)    legible and prominent           weight  6
                        Rule 9(2)    1 mm minimum letter height      weight  4
@@ -280,7 +281,7 @@ score = 100 × (applicableWeight − lostWeight) / applicableWeight
 Two properties matter. Clauses that **could not be assessed** — no panel-area estimate,
 no price to check tax wording against — are excluded from the denominator rather than
 counted as passes, so the score never flatters a label by accident. And every point is
-attributable: `ComplianceResult.outcomes` carries per-clause detail for all thirteen
+attributable: `ComplianceResult.outcomes` carries per-clause detail for all fourteen
 clauses including the passes, which is what Section D of the PDF prints.
 
 **Bands.** Severity leads, the number follows. Any critical finding means the package
@@ -297,6 +298,17 @@ Some judgement calls are documented in the code rather than hidden:
 - **Rule 9(1) legibility** is the one clause that leans on the model's judgement rather
   than a measurement, because legibility is a qualitative test in the rule itself:
   contrast, background clutter and print quality all matter, not just height.
+- **Rule 6(1) misleading declarations** tests only what the label says about itself, and
+  that boundary is the whole design. Two different MRPs on one pack is a real enforcement
+  matter — it is what lets a retailer charge the higher figure and point at the lower one
+  if challenged — and it is provable from the photograph. Whether the pack actually holds
+  500 g is not. So the clause checks self-consistency and arithmetic: conflicting
+  duplicate values, and a unit sale price that does not follow from MRP ÷ net quantity.
+  Duplicates are compared **as parsed values, not as strings**, and only for declarations
+  where a second value genuinely conflicts. An earlier version compared raw text across
+  every field and flagged a fully compliant label whose consumer care read
+  `care@…in | 1800-233-1188` — an email and a phone number are complementary halves of one
+  declaration, not rival values. There is a regression test for exactly that.
 - **Rule 6(2) placement** is the only clause that judges *where* declarations sit rather
   than whether they exist, and the bounding boxes stored for every declaration are what
   make it possible. It applies two tests, because "not grouped" has two distinct
@@ -741,6 +753,7 @@ No gradients as surfaces, no glassmorphism, no neon.
 | `npm run db:push` | Push the schema without a migration |
 | `npm run db:seed` | Load demo data |
 | `npm run db:studio` | Prisma Studio |
+| `npm test` | 67 clause-level tests via Node's built-in runner — every clause on its fires / passes / abstains paths, plus scoring, banding and the parsers |
 | `npm run typecheck` | `tsc --noEmit` |
 | `npm run lint` | ESLint |
 | `npx tsx scripts/generate-assets.ts` | Regenerate PWA icons and the mock label images |
@@ -998,6 +1011,13 @@ Stated plainly, because a compliance tool that overclaims is worse than one that
 - **Not a statutory notice.** The PDF is a screening record for an officer to verify and
   sign. It is not a notice, determination or order under the Legal Metrology Act, 2009,
   and it says so on its face.
-- **Automated tests are not included** in this build. The rule engine is written as pure
-  functions specifically so that clause-level unit tests are straightforward to add, and
-  that is the first thing to do next.
+- **Test coverage is concentrated on the rule engine.** `npm test` runs 67 clause-level
+  tests covering every clause on three paths — fires, passes, and abstains — plus the
+  scoring arithmetic, the banding rules, the suitability gate and the parsers. The API
+  routes, React components and the worker pipeline have no unit tests; they are covered
+  end to end by `scripts/e2e-verify.mjs` against a running instance, which is weaker.
+- **Misleading declarations are detected only where the label contradicts itself.**
+  Conflicting duplicate values and a unit price that does not reconcile with the price
+  and net quantity are caught. Whether the pack genuinely contains its declared quantity,
+  or whether a marketing claim is deceptive, cannot be established from a photograph, so
+  no finding is raised about either.

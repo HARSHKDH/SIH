@@ -20,6 +20,10 @@ storage
 .gitignore
 .github
 
+# Tests run in CI and locally, never inside the runtime image.
+*.test.ts
+*.test.tsx
+
 # Build caches and editor state.
 *.tsbuildinfo
 .eslintcache
